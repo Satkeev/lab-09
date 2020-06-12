@@ -14,6 +14,8 @@ client.on('error', err => console.error(err));
 app.get('/location', locationHandler);
 app.get('/movies', movieHandler);
 app.get('/yelp', yelpHandler);
+// app.get('/weather', weatherHandler);
+// app.get('/trial', trialHandler')
 
 const PORT = process.env.PORT || 3001;
 const ERROR404 = 'The page does not exist.';
@@ -62,24 +64,26 @@ function movieHandler(request, response) {
 
 function yelpHandler(request, response){
   let city = request.query.city;
-  let url = `https://api.yelp.com/v3/businesses/search?`;
+  let url = `https://api.yelp.com/v3/businesses/search`;
 
   const queryParams = {
-    key: process.env.YELP_API_KEY,
-    q: city,
-    format: 'json', 
-    limit: 1
+    categories: 'restaurants',
+    latitude: request.query.latitude,
+    longitude: request.query.longitude,
+    limit: 10
   }
 
   superagent.get(url)
+    .set({Authorization :`Bearer ${process.env.YELP_API_KEY}` })
     .query(queryParams)
     .then(data => {
-      console.log('results from superagent on GEODATA', data.body);
+      console.log('results from superagent on YELP', data.body);
       const GeoData = data.body.businesses.map(restaurants =>{
       return new Business(restaurants);
-      response.status(200).send(location);
-       }).catch() 
-      } )
+      })
+      response.status(200).send(GeoData);
+       
+      } ).catch(err=>console.log(err))
 };
 function restaurantHandler(request, response){
   console.log('this is our restaurant route', request.query);
@@ -112,6 +116,30 @@ function restaurantHandler(request, response){
       response.status(200).send(finalRestaurants);
     })
 };
+app.get('/weather', (request, response) => {
+  let city = request.query.search_query;
+  let url = `https://api.weatherbit.io/v2.0/forecast/daily?city=${city}&key=${process.env.WEATHER_API_KEY}&days=8`;
+  superagent.get(url)
+    .then(resultsFromSuperAgent => {
+      const weatherArray = resultsFromSuperAgent.body.data.map(day => {
+        return new Weather(day);
+      })
+      response.status(200).send(weatherArray);
+    }).catch(err => console.log(err))
+})
+
+app.get('/trails', (request, response) => {
+  let {latitude, longitude} = request.query;
+  let url = `https://www.hikingproject.com/data/get-trails?lat=${latitude}&lon=${longitude}&maxDistance=10&key=${process.env.TRIAL_API_KEY}`;
+  
+  superagent.get(url)
+    .then(resultsFromSuperAgent => {
+      const trailArr = resultsFromSuperAgent.body.trails.map(trail => {
+        return new Trail(trail);
+      })
+      response.status(200).send(trailArr);
+    }).catch(err => console.log(err));
+})
 
      function Location(city, geoData){
         this.search_query = city;
@@ -140,6 +168,23 @@ function restaurantHandler(request, response){
         this.cuisines = obj.restaurant.cuisines;
         this.locality = obj.restaurant.location.locality;
       }
+      function Weather(obj) {
+        this.forecast = obj.weather.description;
+        this.time = obj.valid_date;
+      }
+      
+      function Trail(obj) {
+        this.name = obj.name;
+        this.location = obj.location;
+        this.length = obj.length;
+        this.stars = obj.stars;
+        this.star_votes = obj.starVotes;
+        this.trail_url = obj.url;
+        this.conditions = `${obj.conditionStatus} ${obj.conditionDetails}`;
+        this.condition_date = obj.conditionDate.slice(0, 10);
+        this.condition_date = obj.conditionDate.slice(12, 19);
+      }
+      
 
       function errorHandler(error, request, response) {
         response.status(500).send(error);
@@ -173,7 +218,7 @@ function restaurantHandler(request, response){
 
 
 
-      
+
 
 // function yelpHandler(request, response) {
 //   const url = `https://api.yelp.com/v3/businesses/search?`;
